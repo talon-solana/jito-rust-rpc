@@ -149,6 +149,44 @@ impl JitoJsonRpcSDK {
             .map_err(|e| anyhow!("Request error: {}", e))
     }
 
+    pub async fn simulate_bundle(&self, params: Option<Value>, uuid: Option<&str>) -> Result<Value, anyhow::Error> {
+        let mut endpoint = "/bundles".to_string();
+        
+        if let Some(uuid) = uuid {
+            endpoint = format!("{}?uuid={}", endpoint, uuid);
+        }
+    
+        // Create the parameters for the request
+        let request_params = match params {
+            // If params is already in the correct format [transactions, {encoding: "base64"}]
+            Some(ref value) if value.is_array() && value.as_array().unwrap().len() == 2 => {
+                // Use it as is
+                value.clone()
+            },
+            Some(Value::Array(transactions)) => {
+                // Validate transactions
+                if transactions.is_empty() {
+                    return Err(anyhow!("Bundle must contain at least one transaction"));
+                }
+                if transactions.len() > 5 {
+                    return Err(anyhow!("Bundle can contain at most 5 transactions"));
+                }
+                
+                json!([
+                    transactions,
+                    {
+                        "encoding": "base64"
+                    }
+                ])
+            },
+            _ => return Err(anyhow!("Invalid bundle format: expected an array of transactions")),
+        };
+    
+        self.send_request(&endpoint, "simulateBundle", Some(request_params))
+            .await
+            .map_err(|e| anyhow!("Request error: {}", e))
+    }
+
     pub async fn send_txn(&self, params: Option<Value>, bundle_only: bool) -> Result<Value, reqwest::Error> {
         let mut query_params = Vec::new();
 
